@@ -2,16 +2,40 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Coelhinho</title>
+    <title>Coelhinho da Sorte</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 40px auto; background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);}
-        h1 { text-align: center; color: #333; }
-        #messages { margin-top: 24px; min-height: 200px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; padding: 16px; overflow-y: auto; }
-        .message { padding: 8px 0; border-bottom: 1px solid #eee; }
-        .message:last-child { border-bottom: none; }
-
+        body { 
+            font-family: Arial, sans-serif; 
+            background: #696969; 
+            margin: 0; 
+            padding: 0; 
+        }
+        .container { 
+            max-width: 600px; 
+            margin: 40px auto; 
+            background: #fff; 
+            padding: 24px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; }
+        #messages { 
+            margin-top: 24px; 
+            min-height: 200px; 
+            background: #f9f9f9; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            padding: 16px; 
+            overflow-y: auto; 
+        }
+        .message { 
+            padding: 8px 0; 
+            border-bottom: 1px solid #eee; 
+        }
+        .message:last-child { 
+            border-bottom: none; 
+        }
         .container input {
             width: 94%;
             padding: 12px 16px;
@@ -21,50 +45,125 @@
             font-size: 16px;
             box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
             transition: border-color 0.3s, box-shadow 0.3s;
-            align-self: center;
         }
-
         input:focus {
             border-color: #007BFF;
             box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
             outline: none;
         }
-
         input::placeholder {
             color: #aaa;
             font-style: italic;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            opacity: 0.8;
+        }
+        .btn-iniciar {
+            background-color: #28a745;
+            color: white;
+        }
+        .btn-parar {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn-limpar {
+            background-color: #ffc107;
+            color: black;
+        }
+        .loading {
+            color: #007BFF;
+            font-weight: bold;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Coelhinho da Sorte</h1>
-        <input placeholder="Digite seu número da sorte" type="text" name="" id="">
+        <h1>🐰 Coelhinho da Sorte</h1>
+        <p>O coelhinho da sorte irá gerar 10 números aleatórios entre 1 e 100 para testar sua sorte. Se você conseguir ser sorteado, você ganha!</p>
+        <input placeholder="Digite seu número da sorte (1-100)" type="number" id="ipt_num" min="1" max="100">
+        <button class="btn-iniciar" onclick="init()">Iniciar</button>
+        <button class="btn-parar" onclick="stop()">Parar</button>
         <h2>Números Sorteados</h2>
         <div id="messages">
-            <!-- Mensagens do RabbitMQ aparecerão aqui -->
+            <div class="message">Clique em "Iniciar" para começar o jogo!</div>
         </div>
+        <button class="btn-limpar" onclick="clearMessages()">Limpar dados</button>
     </div>
     <script>
         const messagesDiv = document.getElementById('messages');
+        const numeroSorteInput = document.getElementById('ipt_num');
+
+        let geradorInterval = null;
+        let fetchInterval = null;
+        let numeroSorte = null;
+        let numerosGerados = 0;
+        let jogoAtivo = false;
 
         // Função para buscar mensagens do endpoint
         async function fetchMessages() {
+            if (!jogoAtivo) return;
+
             try {
-                const response = await fetch('http://localhost:8080/consumidor');
+                const response = await fetch('http://localhost:8080/consumer/messages');
                 if (!response.ok) {
                     throw new Error('Erro ao buscar mensagens: ' + response.statusText);
                 }
 
                 const messages = await response.json();
+                
+                if (messages.length === 0) {
+                    if (!messagesDiv.innerHTML.includes('Gerando')) {
+                        messagesDiv.innerHTML = '<div class="message loading">🎲 Gerando números...</div>';
+                    }
+                    return;
+                }
+
                 messagesDiv.innerHTML = '';
 
-                messages.forEach((message) => {
+                let ganhou = false;
+
+                messages.forEach((numero) => {
+                    const numeroLimpo = numero.match(/"(\d+)"/)?.[1] || numero;
                     const msg = document.createElement('div');
                     msg.className = 'message';
-                    msg.textContent = message;
+                    msg.textContent = numeroLimpo;
                     messagesDiv.appendChild(msg);
+
+                    if (parseInt(numeroLimpo) === parseInt(numeroSorte)) {
+                        ganhou = true;
+                        stop();
+                        const winMsg = document.createElement('div');
+                        winMsg.className = 'message';
+                        winMsg.style.color = 'green';
+                        winMsg.style.fontWeight = 'bold';
+                        winMsg.style.fontSize = '18px';
+                        winMsg.textContent = `Parabéns! Você ganhou com o número: ${numeroSorte}`;
+                        messagesDiv.appendChild(winMsg);
+                    }
                 });
+ 
+                if (!ganhou) {
+                    const loseMsg = document.createElement('div');
+                    loseMsg.className = 'message';
+                    loseMsg.style.color = 'red';
+                    loseMsg.style.fontWeight = 'bold';
+                    loseMsg.style.fontSize = '18px';
+                    loseMsg.textContent = `Que pena! Você não foi sorteado desta vez. Seu número era ${numeroSorte}.`;
+                    messagesDiv.appendChild(loseMsg);
+                }
 
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             } catch (error) {
@@ -77,9 +176,109 @@
             }
         }
 
-        fetchMessages();
+        // Função para gerar 10 números aleatórios e enviá-los ao backend
+        async function geradorDeNumeros() {
+            try {
+                if (numerosGerados >= 10) {
+                    stop();
+                    console.log('Limite de 10 números gerados atingido.');
+                    
+                    return;
+                }
 
-        setInterval(fetchMessages, 5000);
+                // Exibe mensagem de carregamento ANTES de gerar os números
+                messagesDiv.innerHTML = '<div class="message loading">Gerando números sorteados...</div>';
+
+                const numerosAleatorios = Array.from({ length: 10 }, () => Math.floor(Math.random() * 100) + 1);
+                console.log(`Números gerados: ${numerosAleatorios.join(', ')}`);
+
+                const response = await fetch('http://localhost:8080/producer/send-number', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ numbers: numerosAleatorios })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Erro ao enviar números: ' + response.statusText);
+                }
+
+                numerosGerados += 10;
+                console.log(`${numerosGerados} números enviados até agora.`);
+                
+                messagesDiv.innerHTML = '<div class="message loading">Processando números...</div>';
+                setTimeout(fetchMessages, 1500);
+
+            } catch (error) {
+                console.error(error);
+                messagesDiv.innerHTML = '<div class="message" style="color: red;">Erro ao gerar números.</div>';
+            }
+        }
+
+        // Função para limpar mensagens
+        async function clearMessages() {
+            try {
+                const response = await fetch('http://localhost:8080/producer/clear', {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Erro ao limpar mensagens: ' + response.statusText);
+                }
+
+                const data = await response.json();
+                console.log('Mensagens limpas com sucesso:', data);
+
+                messagesDiv.innerHTML = '<div class="message" style="color: green;">' + data.message + '</div>';
+                
+                numerosGerados = 0;
+                numeroSorte = null;
+                numeroSorteInput.value = '';
+                jogoAtivo = false;
+                
+            } catch (error) {
+                console.error(error);
+                messagesDiv.innerHTML = '<div class="message" style="color: red;">Erro ao limpar mensagens.</div>';
+            }
+        }
+
+        // Função para iniciar o jogo
+        function init() {
+            const inputValue = numeroSorteInput.value;
+
+            if (!inputValue || isNaN(inputValue) || inputValue < 1 || inputValue > 100) {
+                alert('Por favor, insira um número válido entre 1 e 100.');
+                return;
+            }
+
+            if (jogoAtivo) {
+                alert('O jogo já está em execução!');
+                return;
+            }
+
+            numeroSorte = parseInt(inputValue);
+            numerosGerados = 0;
+            jogoAtivo = true;
+
+            messagesDiv.innerHTML = '<div class="message loading">Iniciando jogo...</div>';
+
+            setTimeout(geradorDeNumeros, 800);
+            
+            console.log('Jogo iniciado! Seu número da sorte é: ' + numeroSorte);
+        }
+
+        // Função para parar o jogo
+        function stop() {
+            if (geradorInterval) {
+                clearInterval(geradorInterval);
+                geradorInterval = null;
+            }
+            if (fetchInterval) {
+                clearInterval(fetchInterval);
+                fetchInterval = null;
+            }
+            jogoAtivo = false;
+            console.log('⏹️ Jogo parado.');
+        }
     </script>
 </body>
 </html>
